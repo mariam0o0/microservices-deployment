@@ -35,7 +35,11 @@ A cloud-native web application consisting of multiple microservices (e.g., User,
 
 ---
 Contributors
+
 Aya AbdElaty
+
 Mariam Yasser
+
 Romisaa Sameh
+
 Ereny Abdelmesieh
