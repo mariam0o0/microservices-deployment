@@ -31,10 +31,12 @@ A cloud-native web application consisting of multiple microservices (e.g., User,
 ---
 
 📦 Planned Enhancements
+
 ✅ Add GitHub Actions for CI/CD
 
 ---
-Contributors
+
+🤝 Contributors
 
 Aya AbdElaty
 
