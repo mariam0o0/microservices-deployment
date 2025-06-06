@@ -1,0 +1,61 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: product-db
+  namespace: microservices-app
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: product-db
+  template:
+    metadata:
+      labels:
+        app: product-db
+    spec:
+      initContainers:
+      - name: clean-and-fix-permissions
+        image: busybox
+        command:
+          - sh
+          - -c
+          - |
+            chown -R 999:999 /var/lib/mysql
+ #           rm -rf /var/lib/mysql/* 
+        volumeMounts:
+        - name: product-db-storage
+          mountPath: /var/lib/mysql
+
+      containers:
+      - name: mysql
+        image: mysql:5.7
+        env:
+        - name: MYSQL_ROOT_PASSWORD
+          valueFrom:
+            secretKeyRef:
+              name: product-db-secret
+              key: MYSQL_ROOT_PASSWORD
+        - name: MYSQL_USER
+          valueFrom:
+            secretKeyRef:
+              name: product-db-secret
+              key: MYSQL_USER
+        - name: MYSQL_PASSWORD
+          valueFrom:
+            secretKeyRef:
+              name: product-db-secret
+              key: MYSQL_PASSWORD
+        - name: MYSQL_DATABASE
+          valueFrom:
+            secretKeyRef:
+              name: product-db-secret
+              key: MYSQL_DATABASE
+        volumeMounts:
+        - name: product-db-storage
+          mountPath: /var/lib/mysql
+
+      volumes:
+      - name: product-db-storage
+        persistentVolumeClaim:
+          claimName: product-db-pvc
+
