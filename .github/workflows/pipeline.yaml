@@ -78,5 +78,4 @@ jobs:
         sed "s|image:.*|image: $IMAGE|" $DEPLOY_FILE | kubectl apply -f -
 
         echo "Waiting for rollout to finish..."
-        kubectl rollout status deployment/$SERVICE-service -n microservices-app || \
         kubectl rollout status deployment/$SERVICE -n microservices-app
