@@ -28,3 +28,5 @@ def create_app():
         app.register_blueprint(frontend_blueprint)
 
         return app
+
+

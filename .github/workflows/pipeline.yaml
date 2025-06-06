@@ -1,0 +1,81 @@
+name: CI/CD Pipeline
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'frontend/**'
+      - 'services/user/**'
+      - 'services/product/**'
+      - 'services/order/**'
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    env:
+      AWS_REGION: ${{ secrets.AWS_REGION }}
+      AWS_ACCOUNT_ID: ${{ secrets.AWS_ACCOUNT_ID }}
+      EKS_CLUSTER_NAME: ${{ secrets.EKS_CLUSTER_NAME }}
+      REPO: project
+
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v3
+      with:
+        fetch-depth: 0
+
+    - name: Configure AWS credentials
+      uses: aws-actions/configure-aws-credentials@v2
+      with:
+        aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+        aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+        aws-region: ${{ secrets.AWS_REGION }}
+
+    - name: Login to Amazon ECR
+      uses: aws-actions/amazon-ecr-login@v2
+
+    - name: Update kubeconfig
+      run: |
+        aws eks update-kubeconfig --region $AWS_REGION --name $EKS_CLUSTER_NAME
+
+    - name: Detect changed service
+      id: detect
+      run: |
+        echo "Detecting which service changed..."
+        CHANGED=""
+        if git diff --name-only ${{ github.event.before }} ${{ github.sha }} | grep -q "^frontend/"; then
+          CHANGED="frontend"
+        elif git diff --name-only ${{ github.event.before }} ${{ github.sha }} | grep -q "^services/order/"; then
+          CHANGED="order"
+        elif git diff --name-only ${{ github.event.before }} ${{ github.sha }} | grep -q "^services/product/"; then
+          CHANGED="product"
+        elif git diff --name-only ${{ github.event.before }} ${{ github.sha }} | grep -q "^services/user/"; then
+          CHANGED="user"
+        fi
+        echo "changed_service=$CHANGED" >> $GITHUB_OUTPUT
+
+    - name: Build, push, and deploy
+      if: steps.detect.outputs.changed_service != ''
+      run: |
+        SERVICE=${{ steps.detect.outputs.changed_service }}
+        if [ "$SERVICE" = "frontend" ]; then
+          DIR=frontend
+          DEPLOY_FILE=k8s/frontend/deployment.yaml
+
+        else
+          DIR=services/$SERVICE
+          DEPLOY_FILE=k8s/$SERVICE/deployment.yaml
+        fi
+
+        IMAGE="$AWS_ACCOUNT_ID.dkr.ecr.$AWS_REGION.amazonaws.com/$REPO:$SERVICE-api-${{ github.sha }}"
+
+        echo "Building Docker image for $SERVICE..."
+        docker build -t $IMAGE $DIR
+
+        echo "Pushing to ECR..."
+        docker push $IMAGE
+
+        echo "Updating deployment image in $DEPLOY_FILE..."
+        sed "s|image:.*|image: $IMAGE|" $DEPLOY_FILE | kubectl apply -f -
+
+        echo "Waiting for rollout to finish..."
+        kubectl rollout status deployment/$SERVICE -n microservices-app
