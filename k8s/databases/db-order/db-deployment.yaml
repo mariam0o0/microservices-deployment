@@ -1,0 +1,65 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: order-db
+  namespace: microservices-app
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: order-db
+  template:
+    metadata:
+      labels:
+        app: order-db
+    spec:
+      initContainers:
+      - name: clean-and-fix-permissions
+        image: busybox
+        command:
+          - sh
+          - -c
+          - |
+            chown -R 999:999 /var/lib/mysql
+            rm -rf /var/lib/mysql/*
+        volumeMounts:
+        - name: order-db-storage
+          mountPath: /var/lib/mysql
+
+      containers:
+      - name: mysql
+        image: mysql:5.7
+        env:
+        - name: MYSQL_ROOT_PASSWORD
+          valueFrom:
+            secretKeyRef:
+              name: order-db-secret
+              key: MYSQL_ROOT_PASSWORD
+        - name: MYSQL_USER
+          valueFrom:
+            secretKeyRef:
+              name: order-db-secret
+              key: MYSQL_USER
+        - name: MYSQL_PASSWORD
+          valueFrom:
+            secretKeyRef:
+              name: order-db-secret
+              key: MYSQL_PASSWORD
+        - name: MYSQL_DATABASE
+          valueFrom:
+            secretKeyRef:
+              name: order-db-secret
+              key: MYSQL_DATABASE
+        args:
+          - "--explicit_defaults_for_timestamp"
+        ports:
+        - containerPort: 3306
+        volumeMounts:
+        - name: order-db-storage
+          mountPath: /var/lib/mysql
+
+      volumes:
+      - name: order-db-storage
+        persistentVolumeClaim:
+          claimName: order-db-pvc
+
