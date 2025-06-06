@@ -51,3 +51,30 @@ jobs:
           CHANGED="user"
         fi
         echo "changed_service=$CHANGED" >> $GITHUB_OUTPUT
+        
+    - name: Build, push, and deploy
+      if: steps.detect.outputs.changed_service != ''
+      run: |
+        SERVICE=${{ steps.detect.outputs.changed_service }}
+        if [ "$SERVICE" = "frontend" ]; then
+          DIR=frontend
+          DEPLOY_FILE=k8s/frontend/deployment.yaml
+
+        else
+          DIR=services/$SERVICE
+          DEPLOY_FILE=k8s/$SERVICE/deployment.yaml
+        fi
+
+        IMAGE="$AWS_ACCOUNT_ID.dkr.ecr.$AWS_REGION.amazonaws.com/$REPO:$SERVICE-api-${{ github.sha }}"
+
+        echo "Building Docker image for $SERVICE..."
+        docker build -t $IMAGE $DIR
+
+        echo "Pushing to ECR..."
+        docker push $IMAGE
+
+        echo "Updating deployment image in $DEPLOY_FILE..."
+        sed "s|image:.*|image: $IMAGE|" $DEPLOY_FILE | kubectl apply -f -
+
+        echo "Waiting for rollout to finish..."
+        kubectl rollout status deployment/$SERVICE -n microservices-app
